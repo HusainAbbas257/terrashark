@@ -1,0 +1,40 @@
+# -------- Python Cache --------
+__pycache__/
+*.py[cod]
+*$py.class
+
+# -------- Virtual Environments --------
+venv/
+.env/
+env/
+.venv/
+
+# -------- Distribution / Packaging --------
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+
+# -------- IDE / Editor junk --------
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# -------- Pygame / Assets --------
+*.log
+
+# -------- System Files --------
+.DS_Store
+Thumbs.db
+desktop.ini
+*.bak
+*.tmp
+# -------- Miscellaneous --------
+__pypackages__/
+*.cover
+.coverage
+htmlcov/
+.tox/
+.nox/
