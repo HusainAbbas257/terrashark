@@ -1,107 +1,225 @@
+"""
+terrain.py — static terrain + logical tilemap for simulation research.
+
+Design:
+- TileData holds ONLY simulation data (no pygame, no images).
+- TileMap is the single source of truth for world state.
+- TerrainRenderer converts TileMap → static background image (cached PNG).
+- Runtime rendering = single blit per frame.
+- Entities query TileMap for biome/buffs, never visuals.
+
+This file intentionally avoids mixing simulation logic with rendering.
+"""
+
+import os
 import random
 from opensimplex import OpenSimplex
+if(__name__=='__main__'):
+    import pygame
 
-class Tile:
-    '''Tile class representing a terrain tile.'''
-    def __init__(self, elevation):
-        '''Tile type determined by elevation.'''
-        self.elevation = elevation  
+    pygame.init()
 
-    def get_colour(self):
-        """Colour decided by elevation thresholds."""
+
+# ---------------------------------------------------------------------
+# Tile Image Cache (visual-only, renderer-facing)
+# ---------------------------------------------------------------------
+class TileImageCache:
+    """
+    Loads and caches biome tile images once.
+
+    This is strictly a rendering helper. Simulation code must never
+    touch this class.
+    """
+    cache = {}
+    _biomes = ("deep-ocean", "shallow-water", "sand", "grass", "forest", "rock")
+
+    @staticmethod
+    def load_images(tile_size: int, tiles_path: str):
+        """
+        Load biome PNG tiles and convert them to display format.
+
+        Must be called AFTER pygame.display.set_mode for fastest blits.
+        """
+        TileImageCache.cache.clear()
+        display_ready = pygame.display.get_surface() is not None
+
+        for name in TileImageCache._biomes:
+            path = os.path.join(tiles_path, f"{name}.png")
+            img = pygame.image.load(path)
+
+            if display_ready:
+                img = img.convert_alpha()
+
+            if img.get_size() != (tile_size, tile_size):
+                img = pygame.transform.scale(img, (tile_size, tile_size))
+
+            TileImageCache.cache[name] = img
+
+    @staticmethod
+    def get(biome_name: str) -> pygame.Surface:
+        """Return cached surface for a biome name."""
+        return TileImageCache.cache[biome_name]
+
+
+# ---------------------------------------------------------------------
+# TileData (simulation-only)
+# ---------------------------------------------------------------------
+class TileData:
+    """
+    Logical representation of one tile.
+
+    This object contains NO pygame surfaces and NO rendering data.
+    Safe to use in headless simulations.
+    """
+    __slots__ = ("elevation", "biome")
+
+    def __init__(self, elevation: float):
+        self.elevation = float(elevation)
+        self.biome = self._classify_biome()
+
+    def _classify_biome(self) -> str:
+        """Classify biome based on elevation."""
         h = self.elevation
-        if h < 0.30:
-            return (0, 0, 150)      # deep water
-        elif h < 0.40:
-            return (20, 20, 200)    # shallow water
-        elif h < 0.48:
-            return (194, 178, 128)  # beach
-        elif h < 0.65:
-            return (34, 139, 34)    # grass
-        elif h < 0.80:
-            return (50, 100, 50)    # dark forest
-        else:
-            return (150, 150, 150)  # rock / mountain
+        if h < 0.30: return "deep-ocean"
+        if h < 0.40: return "shallow-water"
+        if h < 0.45: return "sand"
+        if h < 0.65: return "grass"
+        if h < 0.78: return "forest"
+        return "rock"
 
 
-class TerrainMap:
-    '''TerrainMap class holding a grid of tiles.'''
-    def __init__(self, grid):
-        '''Initialize with a 2D grid of Tile objects.'''
-        self.grid = grid
+# ---------------------------------------------------------------------
+# TileMap (world data container)
+# ---------------------------------------------------------------------
+class TileMap:
+    """
+    Stores all TileData in a flat array for fast lookup.
 
-    def get_list(self):
-        '''Return the 2D grid of tiles.'''
-        return self.grid
+    Acts as the authoritative world state for entities.
+    """
+    def __init__(self, width: int, height: int, tiles: list['TileData']):
+        self.width = width
+        self.height = height
+        self.tiles = tiles  # flat list: index = y * width + x
+
+    def get_tile(self, x: int, y: int) -> TileData:
+        """Return TileData at tile coordinates (x, y)."""
+        return self.tiles[y * self.width + x]
 
 
+# ---------------------------------------------------------------------
+# Terrain Generator (logic-only)
+# ---------------------------------------------------------------------
 class TerrainGenerator:
-    '''Generates terrain using OpenSimplex noise.'''
-    def __init__(self, seed:int, size:tuple, tile_size:int=40):
-        '''Initialize with seed, size (width, height), and tile size.'''
+    """
+    Generates a TileMap using OpenSimplex noise.
+    """
+    def __init__(self, seed: int, size: tuple[int, int],multiplier=1.05):
+        self.multiplier=multiplier
         self.seed = seed
         self.width, self.height = size
-        self.tile_size = tile_size
         self.noise = OpenSimplex(seed)
 
-    def noise2d(self, x, y):
-        """OpenSimplex 2D noise normalised to 0–1"""
-        return (self.noise.noise2(x, y) + 1) / 2
+    def _noise(self, x: float, y: float) -> float:
+        """Normalized OpenSimplex noise [0..1]."""
+        return (self.noise.noise2(x, y) + self.multiplier) /(1+self.multiplier)
 
-    def generate_heightmap(self):
-        """Multi-frequency octave system for realism."""
-        heightmap = []
-        
+    def generate_tilemap(self) -> TileMap:
+        """
+        Generate and return a TileMap containing TileData only.
+        """
         scale = 20.0
+        tiles = []
 
         for y in range(self.height):
-            row = []
             for x in range(self.width):
-                nx = x / scale
-                ny = y / scale
+                h = (
+                    1.00 * self._noise(x/scale,     y/scale) +
+                    0.50 * self._noise(x/scale*2.0, y/scale*2.0) +
+                    0.25 * self._noise(x/scale*4.0, y/scale*4.0)
+                ) / 1.75
+                tiles.append(TileData(h))
 
-                # 4 octaves layered
-                e  = 1.00 * self.noise2d(nx, ny)
-                e += 0.50 * self.noise2d(nx * 2, ny * 2)
-                e += 0.25 * self.noise2d(nx * 4, ny * 4)
-                e /= (1.00 + 0.50 + 0.25)
+        return TileMap(self.width, self.height, tiles)
 
-                row.append(e)
-            heightmap.append(row)
 
-        return heightmap
+# ---------------------------------------------------------------------
+# Terrain Renderer (one-time, visual-only)
+# ---------------------------------------------------------------------
+class TerrainRenderer:
+    """
+    Converts a TileMap into a static background image.
 
-    def generate_terrain(self):
-        '''Generate TerrainMap from heightmap.'''
-        heightmap = self.generate_heightmap()
-        grid = []
+    Used once per seed. Never touched by simulation logic.
+    """
+    def __init__(self, tile_size: int):
+        self.tile_size = tile_size
 
-        for y in range(self.height):
-            row = []
-            for x in range(self.width):
-                tile = Tile(heightmap[y][x])
-                row.append(tile)
-            grid.append(row)
+    def build_background(
+        self,
+        tilemap: TileMap,
+        screen_size: tuple[int, int],
+        out_path: str
+    ) -> pygame.Surface:
+        """
+        Render the tilemap into a cached PNG and return a converted surface.
+        """
+        if os.path.exists(out_path):
+            return pygame.image.load(out_path).convert()
 
-        return TerrainMap(grid)
-    
+        map_w = tilemap.width * self.tile_size
+        map_h = tilemap.height * self.tile_size
+        surface = pygame.Surface((map_w, map_h)).convert()
+
+        blit = surface.blit
+        ts = self.tile_size
+
+        for y in range(tilemap.height):
+            for x in range(tilemap.width):
+                tile = tilemap.get_tile(x, y)
+                img = TileImageCache.get(tile.biome)
+                blit(img, (x * ts, y * ts))
+
+        if surface.get_size() != screen_size:
+            surface = pygame.transform.scale(surface, screen_size)
+
+        os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+        pygame.image.save(surface, out_path)
+        return surface
+
+
+# ---------------------------------------------------------------------
+# Test
+# ---------------------------------------------------------------------
 if __name__ == "__main__":
-    # Example usage
-    seed = random.randint(0, 100000)
-    terrain_generator = TerrainGenerator(seed, (50, 50), tile_size=10)
-    terrain_map = terrain_generator.generate_terrain()
-    tile_grid = terrain_map.get_list()
-    import pygame
-    pygame.init()
-    screen = pygame.display.set_mode((500, 500))
-    for y, row in enumerate(tile_grid):
-        for x, tile in enumerate(row):
-            color = tile.get_colour()
-            pygame.draw.rect(screen, color, (x * terrain_generator.tile_size, y * terrain_generator.tile_size, terrain_generator.tile_size, terrain_generator.tile_size))
-    pygame.display.flip()
-    while True:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                exit()
-    
+    SCREEN_SIZE = (1400, 700)
+    TILE_SIZE = 16
+
+    screen = pygame.display.set_mode(SCREEN_SIZE)
+    pygame.display.set_caption("Static Terrain Simulation")
+
+    TileImageCache.load_images(TILE_SIZE, "assets/tiles")
+
+    seed = random.randint(0, 100_000)
+    generator = TerrainGenerator(seed, (280, 140))
+    tilemap = generator.generate_tilemap()
+
+    renderer = TerrainRenderer(TILE_SIZE)
+    bg = renderer.build_background(
+        tilemap,
+        SCREEN_SIZE,
+        f"cache/terrain_bg_{seed}.png"
+    )
+
+    clock = pygame.time.Clock()
+    running = True
+    while running:
+        for e in pygame.event.get():
+            if e.type == pygame.QUIT:
+                running = False
+
+        screen.blit(bg, (0, 0))
+        pygame.display.flip()
+        clock.tick(60)
+
+    pygame.quit()
