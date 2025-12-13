@@ -78,12 +78,28 @@ class TileData:
     This object contains NO pygame surfaces and NO rendering data.
     Safe to use in headless simulations.
     """
-    __slots__ = ("elevation", "biome")
+    __slots__ = ("elevation", "biome","organism")
 
     def __init__(self, elevation: float):
+        self.organism=[]
         self.elevation = float(elevation)
         self.biome = self._classify_biome()
-
+    def place(self,organism):
+        '''returns 1 if succesfull else -1'''
+        try:
+            self.organism.append(organism)
+        except Exception:
+            return -1
+        else:
+            return 1
+    def remove(self,organism):  
+        '''returns 1 if succesfull else -1'''
+        try:
+            self.organism.remove(organism)
+        except Exception:
+            return -1
+        else:
+            return 1
     def _classify_biome(self) -> str:
         """Classify biome based on elevation."""
         

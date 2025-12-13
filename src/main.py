@@ -15,6 +15,7 @@ and that pygame is available/initialized by project bootstrap.
 import pygame
 import random
 from src.simulation.terrain import *  # keep your project import style
+from src.entities import Organism,base
 
 # NOTE: project __init__.py is expected to call pygame.init() if required.
 # but we ensure pygame is initialized here if not already.
@@ -408,7 +409,9 @@ def run():
             for button in buttons:
                 if button.is_clicked(event):
                     if button.text == 'Start':
-                        show_popup("You discovered an\nunimplemented feature!")
+                        # show_popup("You discovered an\nunimplemented feature!")
+                        shark=Organism.OrganismSprite(base.Genome('shark',2,2,2,2,2,2,2,2,2,2),None)
+                        show_popup(shark.__str__())
                     elif button.text == 'Sample Terrain':
                         # run sample; if it returns False, the user closed window -> exit app
                         cont = run_sample_terrain(screen, map_size=(50, 50), tile_size=10)
