@@ -4,7 +4,9 @@ import pygame
 import random
 from src.entities.base import Genome
 from src.simulation import terrain
-
+import os
+image_path=r'assets\characters'
+images={'ghost':pygame.image.load(os.path.join(image_path,'ghost.png'))}
 
 class OrganismSprite(pygame.sprite.Sprite):
     """
@@ -14,6 +16,7 @@ class OrganismSprite(pygame.sprite.Sprite):
 
     def __init__(
         self,
+        species,
         genome: Genome,
         map: terrain.TileMap,
         tile: terrain.TileData | None = None,
@@ -24,6 +27,7 @@ class OrganismSprite(pygame.sprite.Sprite):
         super().__init__()
 
         # --- Core biological state ---
+        self.species=species
         self.genome = genome
         self.map = map
         self.tile = tile
@@ -40,9 +44,11 @@ class OrganismSprite(pygame.sprite.Sprite):
 
         # --- Sprite visuals ---
         self.radius = radius
-        self.image = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
-        pygame.draw.circle(self.image, color, (radius, radius), radius)
-        self.rect = self.image.get_rect(center=self.position)
+        self.image = images.get(self.species,None)
+        if self.image==None:
+            self.rect=None
+        else:
+            self.rect = self.image.get_rect(center=self.position)
 
     # ==========================================================
     # Life-cycle / physiology
