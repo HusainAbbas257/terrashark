@@ -78,9 +78,10 @@ class TileData:
     This object contains NO pygame surfaces and NO rendering data.
     Safe to use in headless simulations.
     """
-    __slots__ = ("elevation", "biome","organism")
+    __slots__ = ("elevation", "biome","organism","world_pos")
 
-    def __init__(self, elevation: float):
+    def __init__(self, world_pos,elevation: float):
+        self.world_pos=world_pos
         self.organism=[]
         self.elevation = float(elevation)
         self.biome = self._classify_biome()
@@ -203,9 +204,10 @@ class TerrainGenerator:
     """
     Generates a TileMap using OpenSimplex noise.
     """
-    def __init__(self, seed: int, size: tuple[int, int]):
+    def __init__(self, seed: int, size: tuple[int, int],tile_size=4):
         self.seed = seed
         self.width, self.height = size
+        self.tile_size=tile_size
         self.noise = OpenSimplex(seed)
 
     def _noise(self, x: float, y: float) -> float:
@@ -226,7 +228,7 @@ class TerrainGenerator:
                     0.50 * self._noise(x/scale*2.0, y/scale*2.0) +
                     0.25 * self._noise(x/scale*4.0, y/scale*4.0)
                 ) / 1.75
-                tiles.append(TileData(h))
+                tiles.append(TileData(((x-1)*self.tile_size,(y-1)*self.tile_size),h))
 
         return TileMap(self.width, self.height, tiles)
 
@@ -293,7 +295,7 @@ if __name__ == "__main__":
     TileImageCache.load_images(TILE_SIZE, "assets/tiles")
 
     seed = random.randint(0, 100_000)
-    generator = TerrainGenerator(seed, (280, 140))
+    generator = TerrainGenerator(seed, (280, 140),TILE_SIZE)
     tilemap = generator.generate_tilemap()
 
     renderer = TerrainRenderer(TILE_SIZE)
