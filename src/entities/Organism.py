@@ -34,7 +34,7 @@ class OrganismSprite(pygame.sprite.Sprite):
         genome: Genome,
         map: terrain.TileMap,
         tile: terrain.TileData | None = None,
-        position=(0, 0),#removed color as it is not needed anymore
+        position:tuple=(0, 0),#removed color as it is not needed anymore
         radius=5
     ):
         super().__init__()

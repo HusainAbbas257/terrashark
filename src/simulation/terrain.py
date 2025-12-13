@@ -133,6 +133,66 @@ class TileMap:
             raise IndexError(f"tile coords out of bounds: {(x,y)}")
         loc = y * self.width + x
         return self.tiles[loc]
+    def find(self, tile: TileData) -> int:
+        """
+        Return the flat index of a TileData object in the tilemap.
+
+        Parameters
+        ----------
+        tile : TileData
+            Tile object reference to locate.
+
+        Returns
+        -------
+        int
+            Flat index (y * width + x) if found, else -1.
+        """
+        for index, t in enumerate(self.tiles):
+            if t is tile:   # identity check is intentional
+                return index
+        return -1
+
+    def get_neighbour(self, tile: TileData, range: int = 1) -> list[TileData]:
+        """
+        Return neighboring tiles within a square radius.
+
+        Uses Manhattan grid logic on a flat tile array.
+
+        Parameters
+        ----------
+        tile : TileData
+            Center tile.
+        range : int
+            Radius (in tiles) to search.
+
+        Returns
+        -------
+        list[TileData]
+            List of neighboring TileData objects (excluding self).
+        """
+        idx = self.find(tile)
+        if idx == -1:
+            raise ValueError("Tile not found in TileMap")
+
+        cx = idx % self.width
+        cy = idx // self.width
+
+        neighbors = []
+
+        for dy in range(-range, range + 1):
+            for dx in range(-range, range + 1):
+                if dx == 0 and dy == 0:
+                    continue  # skip self
+
+                nx = cx + dx
+                ny = cy + dy
+
+                if 0 <= nx < self.width and 0 <= ny < self.height:
+                    nidx = ny * self.width + nx
+                    neighbors.append(self.tiles[nidx])
+
+        return neighbors
+
 
 
 
