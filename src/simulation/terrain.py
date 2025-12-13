@@ -14,10 +14,10 @@ This file intentionally avoids mixing simulation logic with rendering.
 import os
 import random
 from opensimplex import OpenSimplex
-if(__name__=='__main__'):
-    import pygame
 
-    pygame.init()
+import pygame
+
+pygame.init()
 
 
 # ---------------------------------------------------------------------
@@ -72,6 +72,14 @@ class TileData:
     Safe to use in headless simulations.
     """
     __slots__ = ("elevation", "biome")
+    global biome_elevations
+    
+    biome_elevations={'deep-ocean':0.30,
+                        "shallow-water":0.40,
+                        'sand':.45,
+                        'grass':.65,
+                        'forest':0.78,
+                        'rock':1}
 
     def __init__(self, elevation: float):
         self.elevation = float(elevation)
@@ -79,13 +87,11 @@ class TileData:
 
     def _classify_biome(self) -> str:
         """Classify biome based on elevation."""
+        global biome_elevations
         h = self.elevation
-        if h < 0.30: return "deep-ocean"
-        if h < 0.40: return "shallow-water"
-        if h < 0.45: return "sand"
-        if h < 0.65: return "grass"
-        if h < 0.78: return "forest"
-        return "rock"
+        for biome in biome_elevations:
+            if h<biome_elevations[biome]: return biome
+        raise(f'invalid biome error for height:{h}')
 
 
 # ---------------------------------------------------------------------
@@ -104,7 +110,11 @@ class TileMap:
 
     def get_tile(self, x: int, y: int) -> TileData:
         """Return TileData at tile coordinates (x, y)."""
-        return self.tiles[y * self.width + x]
+        loc=y * self.width + x
+        if(x>self.width  or y>self.height or y<0 or x<0 or loc>len(self.tiles) ):
+            
+            raise(f'get_tile called for invalid ')
+        return self.tiles[loc]
 
 
 # ---------------------------------------------------------------------
@@ -114,15 +124,14 @@ class TerrainGenerator:
     """
     Generates a TileMap using OpenSimplex noise.
     """
-    def __init__(self, seed: int, size: tuple[int, int],multiplier=1.05):
-        self.multiplier=multiplier
+    def __init__(self, seed: int, size: tuple[int, int]):
         self.seed = seed
         self.width, self.height = size
         self.noise = OpenSimplex(seed)
 
     def _noise(self, x: float, y: float) -> float:
         """Normalized OpenSimplex noise [0..1]."""
-        return (self.noise.noise2(x, y) + self.multiplier) /(1+self.multiplier)
+        return (self.noise.noise2(x, y) + 1) /2
 
     def generate_tilemap(self) -> TileMap:
         """
