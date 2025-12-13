@@ -2,12 +2,27 @@
 
 import pygame
 import random
+import os
 from src.entities.base import Genome
 from src.simulation import terrain
-import os
-image_path=r'assets\characters'
-images={'ghost':pygame.image.load(os.path.join(image_path,'ghost.png'))}
+IMAGE_PATH = r'assets\characters'
+_IMAGES = {}
 
+def load_image(name):
+    if name in _IMAGES:
+        return _IMAGES[name]
+
+    path = os.path.join(IMAGE_PATH, f"{name}.png")
+    if os.path.exists(path):
+        _IMAGES[name] = pygame.image.load(path).convert_alpha()
+    else:
+        _IMAGES[name] = None
+    return _IMAGES[name]
+
+
+# --------------------------------------------------
+# Base Organism Sprite
+# --------------------------------------------------
 class OrganismSprite(pygame.sprite.Sprite):
     """
     Technical parent class for all organisms (animals & plants).
@@ -15,20 +30,19 @@ class OrganismSprite(pygame.sprite.Sprite):
     """
 
     def __init__(
-        self,
-        species,
+        self,#removed species name as it is not needed anymore
         genome: Genome,
         map: terrain.TileMap,
         tile: terrain.TileData | None = None,
-        position=(0, 0),
-        color=(0, 255, 0),
+        position=(0, 0),#removed color as it is not needed anymore
         radius=5
     ):
         super().__init__()
 
         # --- Core biological state ---
-        self.species=species
-        self.genome = genome
+        self.genome = genome                # Genome is authoritative
+        self.species = self.genome.species       
+
         self.map = map
         self.tile = tile
 
@@ -43,12 +57,16 @@ class OrganismSprite(pygame.sprite.Sprite):
         self.alive = True
 
         # --- Sprite visuals ---
-        self.radius = radius
-        self.image = images.get(self.species,None)
-        if self.image==None:
-            self.rect=None
+        image = load_image(self.species)
+
+        if image is None:
+            # fallback circle (debug-safe)
+            self.image = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
+            pygame.draw.circle(self.image, (255, 0, 255), (radius, radius), radius)
         else:
-            self.rect = self.image.get_rect(center=self.position)
+            self.image = image
+
+        self.rect = self.image.get_rect(center=self.position)
 
     # ==========================================================
     # Life-cycle / physiology
@@ -148,12 +166,13 @@ class OrganismSprite(pygame.sprite.Sprite):
         return self.position.distance_to(other.position)
 
     def __str__(self):
-        return f'''organism object with following details:
-        genome :{self.genome}
-        hunger={self.hunger}
-        thirst={self.thirst}
-        devs are too lazy too add oter details you can do it 
-    
-    
-    '''
-print('organism called from ',__name__)
+        return (
+            f"Organism<{self.species}> "
+            f"age={self.age:.2f} "
+            f"energy={self.energy:.2f} "
+            f"hunger={self.hunger:.2f} "
+            f"thirst={self.thirst:.2f}"
+        )
+
+
+print("OrganismSprite loaded from", __name__)

@@ -410,7 +410,7 @@ def run():
                 if button.is_clicked(event):
                     if button.text == 'Start':
                         # show_popup("You discovered an\nunimplemented feature!")
-                        shark=Organism.OrganismSprite('shark',base.Genome('shark',2,2,2,2,2,2,2,2,2,2),None)
+                        shark=Organism.OrganismSprite(base.Genome('shark',2,2,2,2,2,2,2,2,2,2),None)
                         show_popup(shark.__str__())
                     elif button.text == 'Sample Terrain':
                         # run sample; if it returns False, the user closed window -> exit app
