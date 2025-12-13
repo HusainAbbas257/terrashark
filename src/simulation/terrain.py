@@ -14,11 +14,18 @@ This file intentionally avoids mixing simulation logic with rendering.
 import os
 import random
 from opensimplex import OpenSimplex
-
 import pygame
-
 pygame.init()
 
+# top of module
+BIOME_THRESHOLDS = [
+    ("deep-ocean", 0.30),
+    ("shallow-water", 0.40),
+    ("sand", 0.45),
+    ("grass", 0.65),
+    ("forest", 0.78),
+    ("rock", 1.0),
+]
 
 # ---------------------------------------------------------------------
 # Tile Image Cache (visual-only, renderer-facing)
@@ -72,14 +79,6 @@ class TileData:
     Safe to use in headless simulations.
     """
     __slots__ = ("elevation", "biome")
-    global biome_elevations
-    
-    biome_elevations={'deep-ocean':0.30,
-                        "shallow-water":0.40,
-                        'sand':.45,
-                        'grass':.65,
-                        'forest':0.78,
-                        'rock':1}
 
     def __init__(self, elevation: float):
         self.elevation = float(elevation)
@@ -87,11 +86,12 @@ class TileData:
 
     def _classify_biome(self) -> str:
         """Classify biome based on elevation."""
-        global biome_elevations
-        h = self.elevation
-        for biome in biome_elevations:
-            if h<biome_elevations[biome]: return biome
-        raise(f'invalid biome error for height:{h}')
+        
+        for biome, thresh in BIOME_THRESHOLDS:
+            if self.elevation < thresh:
+                return biome
+        raise ValueError(f"invalid biome for elevation {self.elevation!r}")
+
 
 
 # ---------------------------------------------------------------------
@@ -104,17 +104,20 @@ class TileMap:
     Acts as the authoritative world state for entities.
     """
     def __init__(self, width: int, height: int, tiles: list['TileData']):
+        if len(tiles) != width * height:
+            raise ValueError("tiles length must equal width * height")  
+
         self.width = width
         self.height = height
         self.tiles = tiles  # flat list: index = y * width + x
 
     def get_tile(self, x: int, y: int) -> TileData:
         """Return TileData at tile coordinates (x, y)."""
-        loc=y * self.width + x
-        if(x>self.width  or y>self.height or y<0 or x<0 or loc>len(self.tiles) ):
-            
-            raise(f'get_tile called for invalid ')
+        if not (0 <= x < self.width and 0 <= y < self.height):
+            raise IndexError(f"tile coords out of bounds: {(x,y)}")
+        loc = y * self.width + x
         return self.tiles[loc]
+
 
 
 # ---------------------------------------------------------------------
@@ -174,7 +177,11 @@ class TerrainRenderer:
         Render the tilemap into a cached PNG and return a converted surface.
         """
         if os.path.exists(out_path):
-            return pygame.image.load(out_path).convert()
+            surf = pygame.image.load(out_path)
+            if surf.get_size() != tuple(screen_size):
+                surf = pygame.transform.scale(surf, screen_size)
+            return surf.convert()
+
 
         map_w = tilemap.width * self.tile_size
         map_h = tilemap.height * self.tile_size
