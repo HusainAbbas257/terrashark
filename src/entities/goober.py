@@ -17,7 +17,6 @@ class Goober(Organism.OrganismSprite):
         radius=5
     ):
         super().__init__(
-            species="goober",
             genome=genome,
             map=map,
             tile=tile,

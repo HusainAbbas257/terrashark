@@ -20,7 +20,6 @@ class Tree(Organism.OrganismSprite):
         apples=0
     ):
         super().__init__(
-            species="tree",
             genome=genome,
             map=map,
             tile=tile,

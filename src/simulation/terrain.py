@@ -285,35 +285,3 @@ class TerrainRenderer:
 # ---------------------------------------------------------------------
 # Test
 # ---------------------------------------------------------------------
-if __name__ == "__main__":
-    SCREEN_SIZE = (1400, 700)
-    TILE_SIZE = 16
-
-    screen = pygame.display.set_mode(SCREEN_SIZE)
-    pygame.display.set_caption("Static Terrain Simulation")
-
-    TileImageCache.load_images(TILE_SIZE, "assets/tiles")
-
-    seed = random.randint(0, 100_000)
-    generator = TerrainGenerator(seed, (280, 140),TILE_SIZE)
-    tilemap = generator.generate_tilemap()
-
-    renderer = TerrainRenderer(TILE_SIZE)
-    bg = renderer.build_background(
-        tilemap,
-        SCREEN_SIZE,
-        f"cache/terrain_bg_{seed}.png"
-    )
-
-    clock = pygame.time.Clock()
-    running = True
-    while running:
-        for e in pygame.event.get():
-            if e.type == pygame.QUIT:
-                running = False
-
-        screen.blit(bg, (0, 0))
-        pygame.display.flip()
-        clock.tick(60)
-
-    pygame.quit()

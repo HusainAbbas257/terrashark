@@ -14,7 +14,7 @@ def load_image(name):
 
     path = os.path.join(IMAGE_PATH, f"{name}.png")
     if os.path.exists(path):
-        _IMAGES[name] = pygame.image.load(path).convert_alpha()
+        _IMAGES[name] = pygame.image.load(path)
     else:
         _IMAGES[name] = None
     return _IMAGES[name]
