@@ -153,7 +153,7 @@ class TileMap:
                 return index
         return -1
 
-    def get_neighbour(self, tile: TileData, range: int = 1) -> list[TileData]:
+    def get_neighbour(self, tile: TileData, rang: int = 1) -> list[TileData]:
         """
         Return neighboring tiles within a square radius.
 
@@ -180,8 +180,8 @@ class TileMap:
 
         neighbors = []
 
-        for dy in range(-range, range + 1):
-            for dx in range(-range, range + 1):
+        for dy in range(-rang, rang + 1):
+            for dx in range(-rang, rang + 1):   
                 if dx == 0 and dy == 0:
                     continue  # skip self
 
@@ -193,8 +193,23 @@ class TileMap:
                     neighbors.append(self.tiles[nidx])
 
         return neighbors
-
-
+    def move(self,_from:'TileData',_to:'TileData',organism):
+        if organism in  _from.organism:
+            _from.organism.remove(organism)
+            _to.organism.append(organism)
+            return
+        raise ValueError('another error buddy this was in the move() function')
+            
+    def get_adjacent(self,tile:TileData)->list[TileData]:
+        adj=[]
+        for t in self.get_neighbour(tile):
+            if t.biome=='shallow-water'or t.biome=='deep-ocean':
+                continue
+            adj.append(t)
+        return adj
+    def distance_to(self, _from:TileData,target:TileData) -> float:
+        """Euclidean distance to another tile."""
+        return ( (_from.world_pos[0]-target.world_pos[0])**2+(_from.world_pos[1]-target.world_pos[1])**2)**0.5
 
 
 # ---------------------------------------------------------------------

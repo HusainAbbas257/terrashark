@@ -30,12 +30,13 @@ class Tree(Organism.OrganismSprite):
         self.apples = apples
         self.seeds = 0
 
-    # ==================================================
+        #   enforce tile ownership invariant 
+        if self.tile is not None:
+            self.tile.place(self)
+
     # Decision making
-    # ==================================================
     def get_task(self):
-        if self.thirst>self.genome.thirst or self.hunger>self.genome.hunger or self.age>self.genome.max_age:
-            return 'die'
+        # NOTE: death is already handled by base update()
         if self.energy < self.genome.energy * 0.75:
             return "photosynthesis"
 
@@ -45,23 +46,16 @@ class Tree(Organism.OrganismSprite):
         return "idle"
 
     def do_task(self, task, **kwargs):
-        if task=='die':
-            self.alive=False
-            self.kill()
-            return
-        elif task == "photosynthesis":
+        if task == "photosynthesis":
             return self.eat()
 
         elif task == "reproduce":
             return self.reproduce()
 
         elif task == "idle":
-            pass
-        
+            return
 
-    # ==================================================
     # Plant-specific behavior
-    # ==================================================
     def eat(self, target=None):
         """
         Photosynthesis:
@@ -85,9 +79,11 @@ class Tree(Organism.OrganismSprite):
         """
         if self.apples > 0:
             self.apples -= 1
-            return
-        
-        super().eaten(predator)
+            return 1
+        else:
+            self.alive = False
+            self.kill()
+            return -1
 
     def reproduce(self):
         """
@@ -96,13 +92,25 @@ class Tree(Organism.OrganismSprite):
         if self.seeds >= 3 or not self.tile:
             return None
 
-        neighbors = self.map.get_neighbours(self.tile, self.genome.vision)
+        neighbors = self.map.get_neighbour(self.tile, self.genome.vision)
         if not neighbors:
             return None
 
-        target_tile = random.choice(neighbors)
+        #   biome + occupancy validation 
+        valid_tiles = [
+            t for t in neighbors
+            if t.biome not in ("deep-ocean", "shallow-water")
+            and len(t.organism) == 0
+        ]
 
-        child_genome = self.genome.reproduce(self.genome)   #assuming only self pollinations
+        if not valid_tiles:
+            return None
+
+        target_tile = random.choice(valid_tiles)
+
+        #   genome reproduction API 
+        child_genome = self.genome.reproduce()
+
         child = Tree(
             genome=child_genome,
             map=self.map,
@@ -110,6 +118,7 @@ class Tree(Organism.OrganismSprite):
             position=target_tile.world_pos
         )
 
+        #   energy + seed cost 
         self.energy *= 0.5
         self.seeds += 1
 

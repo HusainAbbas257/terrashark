@@ -41,26 +41,30 @@ def init_entities(tilemap):
         tile = get_empty_tile(tilemap)
         if not tile:
             break
+
         ent = tree.Tree(
-            base.Genome("tree", 1, 1, 20, 20, 20, 20, 4, 20),
+            base.Genome("tree", 1, 1, 20, 20, random.randrange(30,40), 20, 4, 20),
             tilemap,
             tile,
             tile.world_pos,
         )
-        tile.organism.append(ent)
+
+        # FIX: Tree now self-registers into tile
         trees.append(ent)
 
     for _ in range(GOOBER_COUNT):
         tile = get_empty_tile(tilemap)
         if not tile:
             break
+
         ent = goober.Goober(
-            base.Genome("goober", 10, 10, 100, 100, 1, 10, 10,10, 100, 0),
+            base.Genome("goober", 10, 10, 10, 10,random.randrange(10,20), 10, 10, 10, 100, 0),
             tilemap,
             tile,
             tile.world_pos,
         )
-        tile.organism.append(ent)
+
+        # FIX: Goober now self-registers into tile
         goobers.append(ent)
 
     return trees, goobers
@@ -101,16 +105,37 @@ def run():
 
         # ---- LOGIC UPDATE (FIXED STEP) ----
         while logic_accumulator >= LOGIC_DT:
-            for t in trees:
-                t.do_task(t.get_task())
-            for g in goobers:
-                g.do_task(g.get_task())
+
+            # FIX: update() MUST be called (metabolism, death, movement timers)
+            for t in trees[:]:
+                t.update(LOGIC_DT)
+                if not t.alive:
+                    trees.remove(t)
+
+            for g in goobers[:]:
+                g.update(LOGIC_DT)
+                if not g.alive:
+                    goobers.remove(g)
+
+            # FIX: handle reproduction results
+            for t in trees[:]:
+                child = t.do_task(t.get_task())
+                if isinstance(child, tree.Tree):
+                    trees.append(child)
+
+            for g in goobers[:]:
+                child = g.do_task(g.get_task())
+                if isinstance(child, goober.Goober):
+                    goobers.append(child)
+
             logic_accumulator -= LOGIC_DT
 
         # ---- RENDER ----
         screen.blit(bg, (0, 0))
+
         for t in trees:
             screen.blit(t.image, t.position)
+
         for g in goobers:
             screen.blit(g.image, g.position)
 

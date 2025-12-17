@@ -53,6 +53,11 @@ class OrganismSprite(pygame.sprite.Sprite):
         self.hunger = 0.0
         self.thirst = 0.0
         self.urge = 0.0
+        self.time_till_move=0
+        
+        # movement memory 
+        self.target:terrain.TileData=None
+        self.path:list[terrain.TileData]=[]
 
         self.alive = True
 
@@ -71,12 +76,18 @@ class OrganismSprite(pygame.sprite.Sprite):
     # ==========================================================
     # Life-cycle / physiology
     # ==========================================================
-    def update(self, dt=1.0):
+    def update(self, dt=1/6):
         """Handles aging, metabolism, hunger, thirst, and death."""
         if not self.alive:
             self.kill()
             return
-
+        
+        #  update time till next move
+        if self.time_till_move-dt>0:
+            self.time_till_move-=dt 
+        else:
+            self.time_till_move=0
+            
         # Aging
         self.age += dt
 
@@ -99,6 +110,8 @@ class OrganismSprite(pygame.sprite.Sprite):
             or self.thirst > getattr(self.genome, "thirst_max", 100)
         ):
             self.alive = False
+        
+        self.do_task(self.get_task())
 
     # ==========================================================
     # AI / behavior interface (must override)
@@ -144,30 +157,116 @@ class OrganismSprite(pygame.sprite.Sprite):
     # ==========================================================
     # Movement helpers
     # ==========================================================
-    def move(self, direction: pygame.Vector2, dt=1.0):
+    def get_target(self):
+        area=self.map.get_neighbour(self.tile,rang=self.genome.vision)
+        if not area:
+            return None
+
+        for tile in area:
+            if tile.biome!='shallow-water':
+                return tile
+        return random.choice(area)
+    def move(self,target=None,dt=1/60):
         """Move in a direction using genome speed."""
         if not self.alive:
             return
+        if self.time_till_move>0:
+            return
+        if(target!=None):
+            self.target=target
+        if len(self.path)==0:
+            if self.target==None:   # check for no variable call
+                self.target=self.get_target()
+                self.get_path()
+                self.move(dt=dt)
+                return 
+            else: #there is a target but not a path
+                self.get_path()
+                self.move(dt=dt)
+                return
+        else:   #there is a path 
+            if self.target==None: 
+                #there is a path but no target so assuming the path to be in ascending order and assuming lest tile in path to be target doing move() again
+                self.target=self.path[-1]
+                self.move(dt=dt)
+                return
+            else:
+                # the best case that there is a path and there is a target 
+                next=self.path.pop(0)
+                self.map.move(self.tile,next,self)
+                self.tile=next
+                self.position=next.world_pos
+                # checking if we reached the destiny
+                if next==self.target and  len(self.path)==0:
+                    self.target=None
+                
+        # add waiting time till next movement 
+        wait=(1/self.genome.speed) #time = distanse/speed
+        self.time_till_move = wait
 
-        if direction.length_squared() > 0:
-            direction = direction.normalize()
-
-        self.position += direction * self.genome.speed * dt
-        self.rect.center = self.position
-
-    def wander(self, dt=1.0):
+    def wander(self, dt=1.0/60):
         """Random wandering movement."""
-        angle = random.uniform(0, 360)
-        direction = pygame.Vector2(1, 0).rotate(angle)
-        self.move(direction, dt)
+        self.move(dt=dt)
+    def get_path(self, target=None):
+        """generates a greedy path toward the target (ITERATIVE + SAFE)"""
 
-    def distance_to(self, other) -> float:
-        """Euclidean distance to another organism."""
-        return self.position.distance_to(other.position)
+        if target is None:
+            target = self.target
+        if target is None:
+            self.path = []
+            return
+
+        if self.tile == target:
+            self.path = []
+            self.target = None
+            return
+
+        self.path = []  # reset path every time (CRITICAL)
+
+        current = self.tile
+        visited = set()
+        max_steps = 100  # hard safety cap
+
+        for _ in range(max_steps):
+            if current == target:
+                return
+
+            visited.add(current)
+            adj = self.map.get_adjacent(current)
+
+            if not adj:
+                break
+
+            best_tile = None
+            best_dist = float("inf")
+
+            for tile in adj:
+                if tile == target:
+                    self.path.append(tile)
+                    return
+
+                if tile in visited:
+                    continue
+
+                d = self.map.distance_to(tile, target)
+                if d < best_dist:
+                    best_tile = tile
+                    best_dist = d
+
+            if best_tile is None:
+                break
+
+            self.path.append(best_tile)
+            current = best_tile
+
+        # fail-safe cleanup
+        if not self.path:
+            self.target = None
+
 
     def __str__(self):
         return (
-            f"Organism<{self.species}> "
+            f"Organism<{self.species}> "    
             f"age={self.age:.2f} "
             f"energy={self.energy:.2f} "
             f"hunger={self.hunger:.2f} "

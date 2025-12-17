@@ -24,6 +24,19 @@ class Goober(Organism.OrganismSprite):
             radius=radius
         )
 
+        self.partner = None
+        self.task = None
+        self.target = None
+
+        #memory / meeting-point system
+        self.memory_water = None      # remembers water tile
+        self.memory_partner = None    # remembers partner tile
+        self.memory_food = None       # remembers last food tile
+
+        #enforce tile ownership
+        if self.tile is not None:
+            self.tile.place(self)
+
     # ==================================================
     # Decision making
     # ==================================================
@@ -40,18 +53,60 @@ class Goober(Organism.OrganismSprite):
 
         return "wander"
 
-    def do_task(self, task, **kwargs):
+    def find_organism(self, organisms):
+        """
+        Scan nearby tiles for a specific organism type.
+        """
+        for tile in self.map.get_neighbour(self.tile, self.genome.vision):
+            for org in tile.organism:
+                if isinstance(org, organisms):
+                    return (org, tile)
+        return (None, None)
+
+    def do_task(self, task):
+        self.task = task
+
         if task == "eat":
-            plant = kwargs.get("target")
-            if plant:
+            plant, plant_tile = self.find_organism(tree.Tree)
+
+            if plant and plant_tile:
+                #remember food location
+                self.memory_food = plant_tile
+                self.move(plant_tile)
                 self.eat(plant)
+                return
+
+            #fallback to remembered food
+            if self.memory_food:
+                self.move(self.memory_food)
+                return
 
         elif task == "drink":
-            # placeholder for water tiles later
-            self.thirst = max(0.0, self.thirst - self.genome.energy * 0.1)
+            #use remembered water if exists
+            if self.memory_water:
+                self.move(self.memory_water)
+                self.thirst = max(0.0, self.thirst - self.genome.energy * 0.1)
+                return
+
+            # placeholder: passive thirst reduction
+            self.thirst = max(0.0, self.thirst - self.genome.energy * 0.05)
 
         elif task == "reproduce":
-            return self.reproduce(kwargs.get("partner"))
+            #partner memory 
+            if self.partner:
+                return self.reproduce(self.partner)
+
+            partner, partner_tile = self.find_organism(Goober)
+            if partner and partner_tile and partner is not self:
+                self.partner = partner
+                self.memory_partner = partner_tile
+                self.move(partner_tile)
+                return self.reproduce(partner)
+
+            # fallback: move toward remembered partner
+            if self.memory_partner:
+                self.move(self.memory_partner)
+                return
 
         elif task == "wander":
             self.wander()
@@ -59,7 +114,7 @@ class Goober(Organism.OrganismSprite):
     # ==================================================
     # Herbivore behavior
     # ==================================================
-    def eat(self, target:'tree.Tree'):
+    def eat(self, target: 'tree.Tree'):
         """
         Eat a plant (Tree).
         """
@@ -70,7 +125,11 @@ class Goober(Organism.OrganismSprite):
         self.energy = min(self.genome.energy, self.energy + energy_gain)
         self.hunger = max(0.0, self.hunger - energy_gain)
 
-        target.eaten(self)
+        result = target.eaten(self)
+
+        #forget food if depleted
+        if result == -1:
+            self.memory_food = None
 
     def reproduce(self, partner=None):
         """
@@ -83,8 +142,20 @@ class Goober(Organism.OrganismSprite):
         if not neighbors:
             return None
 
-        tile = random.choice(neighbors)
-        child_genome = self.genome.reproduce(self.genome)
+        #biome + occupancy check
+        valid_tiles = [
+            t for t in neighbors
+            if t.biome not in ("deep-ocean", "shallow-water")
+            and len(t.organism) == 0
+        ]
+
+        if not valid_tiles:
+            return None
+
+        tile = random.choice(valid_tiles)
+
+        #genome API
+        child_genome = self.genome.reproduce()
 
         child = Goober(
             genome=child_genome,
